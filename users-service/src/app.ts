@@ -1,8 +1,12 @@
 import express from 'express';
 import cors from 'cors'; 
 import authRoutes from './routes/users.routes';
+import helmet from 'helmet';
 
 const app = express();
+app.disable('x-powered-by');
+
+app.use(helmet())
 
 //Allow requests from your frontend
 app.use(cors({

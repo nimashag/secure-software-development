@@ -5,9 +5,14 @@ import cors from "cors";
 import dotenv from "dotenv";
 import deliveryRoutes from "./routes/delivery.routes";
 import driverRoutes from "./routes/driver.routes";
+import helmet from 'helmet';
 
 dotenv.config();
+
 const app = express();
+app.disable('x-powered-by');
+app.use(helmet())
+
 
 //Allow requests from your frontend
 app.use(

@@ -3,8 +3,11 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import orderRoutes from './routes/orders.routes';
 import { errorHandler } from './middlewares/errorHandler';
+import helmet from 'helmet';
 
 const app = express();
+app.disable('x-powered-by');
+app.use(helmet())
 
 //Allow requests from your frontend
 app.use(cors({

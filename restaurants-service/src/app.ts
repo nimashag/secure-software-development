@@ -3,8 +3,11 @@ import mongoose from 'mongoose';
 import cors from 'cors'; 
 import restaurantsRoutes from './routes/restaurants.routes';
 import path from 'path';
+import helmet from 'helmet';
 
 const app = express();
+app.disable('x-powered-by');
+app.use(helmet())
 
 //Allow requests from your frontend
 app.use(cors({
