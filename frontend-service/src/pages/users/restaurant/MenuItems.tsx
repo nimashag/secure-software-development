@@ -5,7 +5,14 @@ import { Pencil, Trash2, PlusCircle, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
-import { apiBase, userUrl, restaurantUrl, orderUrl, deliveryUrl } from "../../../api";
+import {
+  apiBase,
+  userUrl,
+  restaurantUrl,
+  orderUrl,
+  deliveryUrl,
+} from "../../../api";
+import { sanitizeImagePath } from "../../../utils/sanitizeFilename";
 
 const MySwal = withReactContent(Swal);
 
@@ -109,9 +116,12 @@ const MenuItems = () => {
     if (confirm.isConfirmed) {
       try {
         const token = localStorage.getItem("token");
-        await axios.delete(`${restaurantUrl}/api/restaurants/my/menu-items/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        await axios.delete(
+          `${restaurantUrl}/api/restaurants/my/menu-items/${id}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         setMenuItems(menuItems.filter((item) => item._id !== id));
         Swal.fire("Deleted!", "Menu item has been deleted.", "success");
       } catch (err) {
@@ -188,9 +198,19 @@ const MenuItems = () => {
                   <td className="px-6 py-4">
                     {item.image ? (
                       <img
-                        src={`${restaurantUrl}/uploads/${item.image}`}
-                        alt={item.name}
+                        src={
+                          item.image
+                            ? `${restaurantUrl}/uploads/${sanitizeImagePath(
+                                item.image
+                              )}`
+                            : "/default-food.png"
+                        }
+                        alt={item.name || "Menu Item"}
                         className="w-16 h-16 object-cover rounded"
+                        loading="lazy"
+                        onError={(e) =>
+                          (e.currentTarget.src = "/default-food.png")
+                        }
                       />
                     ) : (
                       <div className="w-16 h-16 bg-gray-200 rounded" />
@@ -203,7 +223,9 @@ const MenuItems = () => {
                   <td className="px-6 py-4">
                     <div className="flex justify-center items-center gap-3">
                       <button
-                        onClick={() => navigate(`/restaurant-update-menu-item/${item._id}`)}
+                        onClick={() =>
+                          navigate(`/restaurant-update-menu-item/${item._id}`)
+                        }
                         className="p-2 rounded-full hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-600 dark:text-blue-400"
                       >
                         <Pencil size={18} />

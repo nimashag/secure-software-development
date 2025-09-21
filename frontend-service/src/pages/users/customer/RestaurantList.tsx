@@ -4,7 +4,14 @@ import Navbar from "../../../components/Navbar";
 import Footer from "../../../components/Footer";
 import { FaSearch } from "react-icons/fa";
 import { motion } from "framer-motion";
-import { apiBase, userUrl, restaurantUrl, orderUrl, deliveryUrl } from "../../../api";
+import {
+  apiBase,
+  userUrl,
+  restaurantUrl,
+  orderUrl,
+  deliveryUrl,
+} from "../../../api";
+import { sanitizeImagePath } from "../../../utils/sanitizeFilename";
 
 type Restaurant = {
   _id: string;
@@ -16,7 +23,9 @@ type Restaurant = {
 
 const RestaurantList: React.FC = () => {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [filteredRestaurants, setFilteredRestaurants] = useState<Restaurant[]>([]);
+  const [filteredRestaurants, setFilteredRestaurants] = useState<Restaurant[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -76,7 +85,9 @@ const RestaurantList: React.FC = () => {
             <h1 className="text-4xl font-extrabold text-gray-800 mb-2">
               Featured Restaurants 🍽️
             </h1>
-            <p className="text-gray-500 text-sm">Savor the best flavors around you.</p>
+            <p className="text-gray-500 text-sm">
+              Savor the best flavors around you.
+            </p>
           </div>
 
           {/* Search Bar */}
@@ -89,7 +100,10 @@ const RestaurantList: React.FC = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full px-5 py-3 pl-12 rounded-full border border-gray-300 bg-white/60 backdrop-blur-md shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
-              <FaSearch className="absolute left-4 top-3.5 text-gray-400" size={18} />
+              <FaSearch
+                className="absolute left-4 top-3.5 text-gray-400"
+                size={18}
+              />
             </div>
           </div>
 
@@ -97,7 +111,7 @@ const RestaurantList: React.FC = () => {
           {filteredRestaurants.length === 0 ? (
             <p className="text-center text-gray-500">No restaurants found.</p>
           ) : (
-            <motion.div 
+            <motion.div
               className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3"
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
@@ -110,9 +124,18 @@ const RestaurantList: React.FC = () => {
                   className="bg-white rounded-3xl border border-gray-200 overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 flex flex-col"
                 >
                   <img
-                    src={`${restaurantUrl}/uploads/${restaurant.image}`}
-                    alt={restaurant.name}
+                    src={
+                      restaurant.image
+                        ? `${restaurantUrl}/uploads/${sanitizeImagePath(
+                            restaurant.image
+                          )}`
+                        : "/default-restaurant.png"
+                    }
                     className="w-full h-48 object-cover"
+                    loading="lazy"
+                    onError={(e) =>
+                      (e.currentTarget.src = "/default-restaurant.png")
+                    }
                   />
 
                   <div className="p-6 flex flex-col flex-grow">
@@ -141,7 +164,12 @@ const RestaurantList: React.FC = () => {
                     <div className="pt-5 flex justify-end">
                       <a
                         href={`/restaurants/${restaurant._id}`}
-                        onClick={() => localStorage.setItem('selectedRestaurantId', restaurant._id)}
+                        onClick={() =>
+                          localStorage.setItem(
+                            "selectedRestaurantId",
+                            restaurant._id
+                          )
+                        }
                         className="inline-block text-white bg-amber-500 hover:bg-amber-600 px-5 py-2 rounded-full text-sm font-semibold transition-all"
                       >
                         View Menu →

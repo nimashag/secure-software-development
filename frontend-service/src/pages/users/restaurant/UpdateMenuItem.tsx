@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import AdminLayout from "./RestaurantAdminLayout";
 import Swal from "sweetalert2";
 import { apiBase, restaurantUrl } from "../../../api";
+import { sanitizeImagePath } from "../../../utils/sanitizeFilename";
 
 const UpdateMenuItem = () => {
   const { id } = useParams<{ id: string }>(); // id = menuItem id
@@ -21,7 +22,7 @@ const UpdateMenuItem = () => {
     category: "",
     price: "",
   });
-  
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,9 +31,12 @@ const UpdateMenuItem = () => {
         const token = localStorage.getItem("token");
 
         // First fetch the restaurant to get restaurant ID
-        const restaurantRes = await fetch(`${restaurantUrl}/api/restaurants/my`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const restaurantRes = await fetch(
+          `${restaurantUrl}/api/restaurants/my`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
         const restaurantData = await restaurantRes.json();
         const resId = restaurantData[0]?._id;
         setRestaurantId(resId);
@@ -54,7 +58,6 @@ const UpdateMenuItem = () => {
           imageFile: undefined,
           existingImage: itemData.image,
         });
-
       } catch (error) {
         console.error("Error fetching menu item:", error);
       }
@@ -63,7 +66,9 @@ const UpdateMenuItem = () => {
     if (id) fetchRestaurantAndItem();
   }, [id]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -81,7 +86,7 @@ const UpdateMenuItem = () => {
       price: "",
     };
     let isValid = true;
-  
+
     if (!form.name.trim()) {
       validationErrors.name = "Name is required.";
       isValid = false;
@@ -89,29 +94,34 @@ const UpdateMenuItem = () => {
       validationErrors.name = "Name must be at least 2 characters.";
       isValid = false;
     }
-  
+
     if (!form.category.trim()) {
       validationErrors.category = "Category is required.";
       isValid = false;
     }
-  
+
     if (!form.description.trim()) {
       validationErrors.description = "Description is required.";
       isValid = false;
     } else if (form.description.length < 10) {
-      validationErrors.description = "Description must be at least 10 characters.";
+      validationErrors.description =
+        "Description must be at least 10 characters.";
       isValid = false;
     }
-  
+
     if (form.price <= 0) {
       validationErrors.price = "Price must be greater than 0.";
       isValid = false;
     }
-  
+
     setErrors(validationErrors);
-  
+
     if (!isValid) {
-      Swal.fire("Validation Error", "Please correct the highlighted fields.", "warning");
+      Swal.fire(
+        "Validation Error",
+        "Please correct the highlighted fields.",
+        "warning"
+      );
       return;
     }
 
@@ -127,15 +137,20 @@ const UpdateMenuItem = () => {
     }
 
     try {
-      await fetch(`${restaurantUrl}/api/restaurants/${restaurantId}/menu-items/${id}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
+      await fetch(
+        `${restaurantUrl}/api/restaurants/${restaurantId}/menu-items/${id}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }
+      );
 
-      Swal.fire("Success!", "Menu item updated successfully!", "success").then(() => {
-        navigate("/restaurant-menu");
-      });
+      Swal.fire("Success!", "Menu item updated successfully!", "success").then(
+        () => {
+          navigate("/restaurant-menu");
+        }
+      );
     } catch (error) {
       console.error("Error updating item:", error);
       Swal.fire("Error", "Failed to update menu item.", "error");
@@ -146,7 +161,9 @@ const UpdateMenuItem = () => {
     <AdminLayout>
       <div className="p-6 font-['Inter'] text-gray-800 dark:text-gray-100">
         <div className="max-w-3xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-md p-8">
-          <h1 className="text-3xl font-bold mb-6 text-center">Update Menu Item</h1>
+          <h1 className="text-3xl font-bold mb-6 text-center">
+            Update Menu Item
+          </h1>
 
           <div className="space-y-4">
             <div>
@@ -158,7 +175,9 @@ const UpdateMenuItem = () => {
                 onChange={handleChange}
                 className="w-full border rounded-md p-2 dark:bg-gray-700"
               />
-              {errors.name && <p className="text-sm text-red-500 mt-1">{errors.name}</p>}
+              {errors.name && (
+                <p className="text-sm text-red-500 mt-1">{errors.name}</p>
+              )}
             </div>
 
             <div>
@@ -170,22 +189,32 @@ const UpdateMenuItem = () => {
                 onChange={handleChange}
                 className="w-full border rounded-md p-2 dark:bg-gray-700"
               />
-              {errors.name && <p className="text-sm text-red-500 mt-1">{errors.category}</p>}
+              {errors.name && (
+                <p className="text-sm text-red-500 mt-1">{errors.category}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Description</label>
+              <label className="block text-sm font-medium mb-1">
+                Description
+              </label>
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
                 className="w-full border rounded-md p-2 dark:bg-gray-700"
               />
-              {errors.name && <p className="text-sm text-red-500 mt-1">{errors.description}</p>}
+              {errors.name && (
+                <p className="text-sm text-red-500 mt-1">
+                  {errors.description}
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Price ($)</label>
+              <label className="block text-sm font-medium mb-1">
+                Price ($)
+              </label>
               <input
                 type="number"
                 name="price"
@@ -193,11 +222,15 @@ const UpdateMenuItem = () => {
                 onChange={handleChange}
                 className="w-full border rounded-md p-2 dark:bg-gray-700"
               />
-              {errors.name && <p className="text-sm text-red-500 mt-1">{errors.price}</p>}
+              {errors.name && (
+                <p className="text-sm text-red-500 mt-1">{errors.price}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Upload New Image (Optional)</label>
+              <label className="block text-sm font-medium mb-1">
+                Upload New Image (Optional)
+              </label>
               <input
                 type="file"
                 name="image"
@@ -208,9 +241,17 @@ const UpdateMenuItem = () => {
               {form.existingImage && (
                 <div className="mt-3">
                   <img
-                    src={`${restaurantUrl}/uploads/${form.existingImage}`}
+                    src={
+                      form.existingImage
+                        ? `${restaurantUrl}/uploads/${sanitizeImagePath(
+                            form.existingImage
+                          )}`
+                        : "/default-food.png"
+                    }
                     alt="Current"
                     className="w-24 h-24 object-cover rounded-md"
+                    loading="lazy"
+                    onError={(e) => (e.currentTarget.src = "/default-food.png")}
                   />
                 </div>
               )}

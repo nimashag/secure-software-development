@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import { restaurantUrl, orderUrl } from "../../../api";
+import { sanitizeImagePath } from "../../../utils/sanitizeFilename";
 
 interface Restaurant {
   _id: string;
@@ -235,9 +236,19 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-8 flex flex-col md:flex-row gap-8 mb-10">
               {restaurant && restaurant.image && (
                 <img
-                  src={`${restaurantUrl}/uploads/${restaurant.image}`}
-                  alt="Restaurant"
+                  src={
+                    restaurant?.image
+                      ? `${restaurantUrl}/uploads/${sanitizeImagePath(
+                          restaurant.image
+                        )}`
+                      : "/default-restaurant.png"
+                  }
+                  alt={restaurant?.name || "Restaurant"}
                   className="rounded-xl w-full md:w-1/2 object-cover h-72 shadow-md"
+                  loading="lazy"
+                  onError={(e) =>
+                    (e.currentTarget.src = "/default-restaurant.png")
+                  }
                 />
               )}
               <div className="flex flex-col justify-between flex-1">
