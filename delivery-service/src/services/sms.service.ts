@@ -1,8 +1,11 @@
 import axios from 'axios';
+import dotenv from 'dotenv';
 
-// TextIt API endpoint and credentials
-const TEXTIT_API_URL = ' https://api.textit.biz/';
-const TEXTIT_API_KEY = '2204gkd1611443b55dtd1576adh8708'; 
+dotenv.config();
+
+const TEXTIT_API_URL = process.env.TEXTIT_API_URL!;
+const TEXTIT_API_KEY = process.env.TEXTIT_API_KEY!;
+
 
 // Function to send SMS
 export const sendSMS = async (to: string, message: string) => {
@@ -11,7 +14,7 @@ export const sendSMS = async (to: string, message: string) => {
       TEXTIT_API_URL,
       {
         // Parameters for sending the message
-        to: '+94778964821',  
+        to: '+94xxxxxxx',  
         text: message,  // The content of the message
       },
       {

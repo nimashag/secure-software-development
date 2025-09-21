@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import * as OrdersService from "../services/orders.service";
 import { AuthenticatedRequest } from "../middlewares/auth";
 import { fetchMenuItems, fetchRestaurant } from "../api/restaurant.api";
-import stripe from '../utils/stripe';
+import stripe from "../utils/stripe";
 
 export const create = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -24,7 +24,9 @@ export const create = async (req: AuthenticatedRequest, res: Response) => {
     // 🔗 Fetch menu items from the restaurant service
     const menuItems = await fetchMenuItems(restaurantId);
     if (!menuItems || menuItems.length === 0) {
-      return res.status(400).json({ message: "No menu items found for this restaurant." });
+      return res
+        .status(400)
+        .json({ message: "No menu items found for this restaurant." });
     }
 
     const order = await OrdersService.createOrder(
@@ -82,7 +84,9 @@ export const updateDeliveryAddress = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Delivery address is required" });
     }
 
-    const updatedOrder = await OrdersService.updateOrder(id, { deliveryAddress });
+    const updatedOrder = await OrdersService.updateOrder(id, {
+      deliveryAddress,
+    });
 
     if (!updatedOrder) {
       return res.status(404).json({ message: "Order not found" });
@@ -96,16 +100,23 @@ export const updateDeliveryAddress = async (req: Request, res: Response) => {
 };
 
 // Update special instructions
-export const updateSpecialInstructions = async (req: Request, res: Response) => {
+export const updateSpecialInstructions = async (
+  req: Request,
+  res: Response
+) => {
   try {
     const { id } = req.params;
     const { specialInstructions } = req.body;
 
     if (specialInstructions === undefined) {
-      return res.status(400).json({ message: "Special instructions are required" });
+      return res
+        .status(400)
+        .json({ message: "Special instructions are required" });
     }
 
-    const updatedOrder = await OrdersService.updateOrder(id, { specialInstructions });
+    const updatedOrder = await OrdersService.updateOrder(id, {
+      specialInstructions,
+    });
 
     if (!updatedOrder) {
       return res.status(404).json({ message: "Order not found" });
@@ -149,10 +160,14 @@ export const update = async (req: Request, res: Response) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // Get user email
-    
+
     const userEmail = "dev40.emailtest@gmail.com";
 
-    const updated = await OrdersService.updateOrder(req.params.id, updateData, userEmail);
+    const updated = await OrdersService.updateOrder(
+      req.params.id,
+      updateData,
+      userEmail
+    );
 
     if (!updated) {
       return res.status(404).json({ message: "Order not found" });
@@ -185,14 +200,17 @@ export const deleteOrder = async (req: Request, res: Response) => {
   }
 };
 
-export const getCurrentUserOrders = async (req: AuthenticatedRequest, res: Response) => {
+export const getCurrentUserOrders = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    
+
     console.log(`▶️ Fetching orders for user: ${req.user.id}`);
     const orders = await OrdersService.getOrdersByUserId(req.user.id);
     console.log(`Found ${orders.length} orders for user`);
-    
+
     res.json(orders);
   } catch (err) {
     console.error("Error getting user orders:", err);
@@ -207,57 +225,65 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
     const tax = totalAmount * 0.08;
 
     if (!totalAmount || totalAmount <= 0) {
-      return res.status(400).json({ message: "Total amount must be greater than 0." });
+      return res
+        .status(400)
+        .json({ message: "Total amount must be greater than 0." });
     }
 
     const itemDetails = Array.isArray(req.body.items)
-  ? req.body.items.map((item: any) => ({
-      name: item.name,
-      price: item.price,
-    }))
-  : [];
+      ? req.body.items.map((item: any) => ({
+          name: item.name,
+          price: item.price,
+        }))
+      : [];
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round((totalAmount + deliveryFee + tax) * 100), // 💳 Stripe accepts amounts in cents
-      currency: 'usd', // or your preferred currency
-      payment_method_types: ['card'],
+      currency: "usd", // or your preferred currency
+      payment_method_types: ["card"],
     });
 
     console.log("✅ Created Payment Intent:", paymentIntent.id);
 
-    res.json({ 
+    res.json({
       clientSecret: paymentIntent.client_secret,
-      items: itemDetails
+      items: itemDetails,
     });
   } catch (error) {
     console.error("Error creating Payment Intent:", error);
-    res.status(500).json({ message: "Something went wrong while creating payment intent" });
+    res
+      .status(500)
+      .json({ message: "Something went wrong while creating payment intent" });
   }
 };
 
 export const stripeWebhook = async (req: Request, res: Response) => {
-  const sig = req.headers['stripe-signature'];
-  const endpointSecret = process.env.STRIPE_ENDPOINT_SECRET as string; // <-- we'll get it soon
-  
+  const sig = req.headers["stripe-signature"];
+  const endpointSecret = process.env.STRIPE_ENDPOINT_SECRET as string;
+
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig as string, endpointSecret);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig as string,
+      endpointSecret
+    );
   } catch (err: any) {
-    console.error(`⚠️  Webhook signature verification failed:`, err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    err.status = 400; // set HTTP code
+    return next(err); // hand over to centralized error handler
   }
 
   // Handle event types
-  if (event.type === 'payment_intent.succeeded') {
+  if (event.type === "payment_intent.succeeded") {
     const paymentIntent = event.data.object as any;
-    const orderId = paymentIntent.metadata.orderId; // Assuming you store the orderId in metadata
+    const orderId = paymentIntent.metadata.orderId; 
     await OrdersService.processOrderPayment(orderId, {
-      method: 'Stripe',
+      method: "Stripe",
       transactionId: paymentIntent.id,
     });
-    
-    console.log('✅ PaymentIntent was successful:', paymentIntent.id);
+
+    console.log("✅ PaymentIntent was successful:", paymentIntent.id);
 
     // Find the order associated with paymentIntentId and mark it as Paid
     // Example if you store paymentIntentId in your Order Model
@@ -291,18 +317,23 @@ export const markOrderPaid = async (req: Request, res: Response) => {
   }
 };
 
-export const markOrderAsPaid = async (req: AuthenticatedRequest, res: Response) => {
+export const markOrderAsPaid = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     const { id } = req.params;
     const { paymentMethod, transactionId } = req.body;
 
     if (!paymentMethod || !transactionId) {
-      return res.status(400).json({ message: "Payment method and transaction ID are required" });
+      return res
+        .status(400)
+        .json({ message: "Payment method and transaction ID are required" });
     }
 
     const updatedOrder = await OrdersService.processOrderPayment(id, {
       transactionId,
-      method: paymentMethod || 'Stripe'
+      method: paymentMethod || "Stripe",
     });
 
     if (!updatedOrder) {
@@ -316,37 +347,45 @@ export const markOrderAsPaid = async (req: AuthenticatedRequest, res: Response) 
   }
 };
 
-export const updateOrderStatus = async (req: AuthenticatedRequest, res: Response) => {
+export const updateOrderStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
   try {
     if (!req.user) return res.status(401).json({ message: "Unauthorized" });
-    
+
     const { status } = req.body;
     const orderId = req.params.id;
-    
+
     if (!status) {
       return res.status(400).json({ message: "Status is required" });
     }
-    
+
     // For restaurant admin, verify they own this order's restaurant
-    if (req.user.role === 'restaurantAdmin') {
+    if (req.user.role === "restaurantAdmin") {
       const order = await OrdersService.getOrderById(orderId);
       if (!order) {
         return res.status(404).json({ message: "Order not found" });
       }
-      
+
       // Check if admin has restaurantId and if order belongs to admin's restaurant
-      if (!req.user.restaurantId || order.restaurantId.toString() !== req.user.restaurantId) {
-        return res.status(403).json({ message: "Not authorized to update this order" });
+      if (
+        !req.user.restaurantId ||
+        order.restaurantId.toString() !== req.user.restaurantId
+      ) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to update this order" });
       }
     }
-    
+
     console.log(`▶️ Updating status for order ${orderId} to ${status}`);
     const updatedOrder = await OrdersService.updateOrderStatus(orderId, status);
-    
+
     if (!updatedOrder) {
       return res.status(404).json({ message: "Order not found" });
     }
-    
+
     console.log(`✅ Updated order status: ${updatedOrder._id}`);
     res.json(updatedOrder);
   } catch (err) {
@@ -354,3 +393,7 @@ export const updateOrderStatus = async (req: AuthenticatedRequest, res: Response
     res.status(500).json({ message: "Something went wrong" });
   }
 };
+
+function next(err: any) {
+  throw new Error("Function not implemented.");
+}
