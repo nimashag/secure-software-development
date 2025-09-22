@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import gsap from "gsap";
 import axios from "axios";
 import { userUrl } from "../../../api";
+import { GoogleLogin } from "@react-oauth/google";
 
 const LoginCustomer = () => {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -142,6 +143,36 @@ const LoginCustomer = () => {
               </button>
             </div>
           </form>
+
+          {/* Google Login */}
+          <div className="mt-5 flex flex-col items-center">
+            <div className="text-xs text-gray-500 mb-2">or</div>
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                try {
+                  const credential = credentialResponse.credential;
+                  if (!credential) return alert("No Google credential received");
+
+                  const res = await axios.post(`${userUrl}/api/auth/google`, { credential });
+                  const { token, user } = res.data;
+
+                  if (user.role === "customer") {
+                    localStorage.setItem("token", token);
+                    localStorage.setItem("user", JSON.stringify(user));
+                    navigate('/customer-home');
+                  } else {
+                    alert("Access denied: Not a customer account");
+                  }
+                } catch (e: any) {
+                  alert(e.response?.data?.message || "Google sign-in failed");
+                }
+              }}
+              onError={() => {
+                alert("Google sign-in was cancelled or failed");
+              }}
+              // You can also pass "theme", "size", "text" props if you want
+            />
+          </div>
 
           {/* Navigation to Register */}
           <Link to="/register/customer">

@@ -6,52 +6,50 @@ import logoicon1 from "../assets/Logo.png";
 import searchicon from "../assets/search_icon.png";
 import usericon from "../assets/user_icon.png";
 import carticon from "../assets/carticon.png";
-import { useCart } from '../contexts/CartContext';
+import { useCart } from "../contexts/CartContext";
 
 const Navbar: React.FC = () => {
   const [isLogged, setIsLogged] = useState<boolean>(false);
   const [isMobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [isUserDropdownOpen, setUserDropdownOpen] = useState<boolean>(false);
   const [cartCount, setCartCount] = useState<number>(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const { cartItemCount } = useCart();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
     setIsLogged(!!token);
 
+    // load avatar saved during Google sign-in
+    const storedAvatar = localStorage.getItem("avatar");
+    setAvatarUrl(storedAvatar);
+
     const updateCartCount = () => {
-    const cart = JSON.parse(localStorage.getItem("cart") || "[]");
-    setCartCount(cart.length);
-  };
+      const cart = JSON.parse(localStorage.getItem("cart") || "[]");
+      setCartCount(cart.length);
+    };
 
-  updateCartCount();
-
-  // Listen to storage changes (in case items added on a different page/tab)
-  window.addEventListener("storage", updateCartCount);
-
-  return () => {
-    window.removeEventListener("storage", updateCartCount);
-  };
+    updateCartCount();
+    window.addEventListener("storage", updateCartCount);
+    return () => window.removeEventListener("storage", updateCartCount);
   }, []);
 
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen((prev) => !prev);
-  };
-
-  const toggleUserDropdown = () => {
-    setUserDropdownOpen((prev) => !prev);
-  };
+  const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
+  const toggleUserDropdown = () => setUserDropdownOpen((prev) => !prev);
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("avatar");       // clear avatar on logout
+    localStorage.removeItem("google_name");
+    localStorage.removeItem("google_email");
     setIsLogged(false);
+    setAvatarUrl(null);
     location.reload();
   };
 
   return (
-    <div className='px-4 sm:px-[5vw] md:px-[7vw] lg:px-[9vw] flex items-center justify-between font-medium'>
-    
-      
+    <div className="px-4 sm:px-[5vw] md:px-[7vw] lg:px-[9vw] flex items-center justify-between font-medium">
       {/* Logo */}
       <motion.img
         src={logoicon1}
@@ -88,7 +86,6 @@ const Navbar: React.FC = () => {
 
       {/* Right Icons */}
       <div className="flex items-center gap-6">
-
         <motion.img
           src={searchicon}
           className="w-5 cursor-pointer"
@@ -96,32 +93,53 @@ const Navbar: React.FC = () => {
           whileHover={{ scale: 1.2 }}
         />
 
-        {/* User Icon */}
+        {/* User / Avatar */}
         <div className="relative">
-          <motion.img
-            src={usericon}
-            className="w-5 cursor-pointer"
-            alt="User Icon"
-            whileHover={{ scale: 1.2 }}
-            onClick={toggleUserDropdown}
-          />
+          {isLogged && avatarUrl ? (
+            <motion.img
+              src={avatarUrl}
+              alt="User Avatar"
+              className="w-8 h-8 rounded-full object-cover cursor-pointer border border-gray-200"
+              whileHover={{ scale: 1.1 }}
+              onClick={toggleUserDropdown}
+            />
+          ) : (
+            <motion.img
+              src={usericon}
+              className="w-5 cursor-pointer"
+              alt="User Icon"
+              whileHover={{ scale: 1.2 }}
+              onClick={toggleUserDropdown}
+            />
+          )}
+
           {isUserDropdownOpen && (
             <motion.div
-              className="absolute right-0 mt-2 bg-gray-100 rounded-md shadow-md py-3 px-4 w-40"
+              className="absolute right-0 mt-2 bg-gray-100 rounded-md shadow-md py-3 px-4 w-44"
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
             >
               {!isLogged ? (
                 <div className="flex flex-col gap-2">
-                  <Link to="/register/customer" className="hover:text-black">Signup</Link>
-                  <Link to="/login/customer" className="hover:text-black">Login</Link>
+                  <Link to="/register/customer" className="hover:text-black">
+                    Signup
+                  </Link>
+                  <Link to="/login/customer" className="hover:text-black">
+                    Login
+                  </Link>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <Link to="/profile" className="hover:text-black">My Profile</Link>
-                  <Link to="/my-orders" className="hover:text-black">My Orders</Link>
-                  <p className="cursor-pointer hover:text-black" onClick={logout}>Logout</p>
+                  <Link to="/profile" className="hover:text-black">
+                    My Profile
+                  </Link>
+                  <Link to="/my-orders" className="hover:text-black">
+                    My Orders
+                  </Link>
+                  <p className="cursor-pointer hover:text-black" onClick={logout}>
+                    Logout
+                  </p>
                 </div>
               )}
             </motion.div>
@@ -184,7 +202,6 @@ const Navbar: React.FC = () => {
           </ul>
         </div>
       )}
-
     </div>
   );
 };
