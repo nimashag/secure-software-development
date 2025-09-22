@@ -20,7 +20,7 @@ const Navbar: React.FC = () => {
     const token = localStorage.getItem("token");
     setIsLogged(!!token);
 
-    // load avatar saved during Google sign-in
+    // load avatar saved at Google login
     const storedAvatar = localStorage.getItem("avatar");
     setAvatarUrl(storedAvatar);
 
@@ -30,8 +30,16 @@ const Navbar: React.FC = () => {
     };
 
     updateCartCount();
-    window.addEventListener("storage", updateCartCount);
-    return () => window.removeEventListener("storage", updateCartCount);
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "cart") updateCartCount();
+      if (e.key === "avatar" || e.key === "token") {
+        setIsLogged(!!localStorage.getItem("token"));
+        setAvatarUrl(localStorage.getItem("avatar"));
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
@@ -40,16 +48,17 @@ const Navbar: React.FC = () => {
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    localStorage.removeItem("avatar");       // clear avatar on logout
+    localStorage.removeItem("avatar");
     localStorage.removeItem("google_name");
     localStorage.removeItem("google_email");
     setIsLogged(false);
     setAvatarUrl(null);
-    location.reload();
+    // notify other tabs/components
+    window.dispatchEvent(new StorageEvent("storage", { key: "token" }));
   };
 
   return (
-    <div className="px-4 sm:px-[5vw] md:px-[7vw] lg:px-[9vw] flex items-center justify-between font-medium">
+    <div className='px-4 sm:px-[5vw] md:px-[7vw] lg:px-[9vw] flex items-center justify-between font-medium'>
       {/* Logo */}
       <motion.img
         src={logoicon1}
@@ -73,9 +82,7 @@ const Navbar: React.FC = () => {
             <NavLink
               to={item.to}
               className={({ isActive }) =>
-                `flex flex-col items-center gap-1 ${
-                  isActive ? "text-orange-600" : "text-gray-600"
-                } hover:text-orange-500`
+                `flex flex-col items-center gap-1 ${isActive ? "text-orange-600" : "text-gray-600"} hover:text-orange-500`
               }
             >
               {item.text}
@@ -122,24 +129,14 @@ const Navbar: React.FC = () => {
             >
               {!isLogged ? (
                 <div className="flex flex-col gap-2">
-                  <Link to="/register/customer" className="hover:text-black">
-                    Signup
-                  </Link>
-                  <Link to="/login/customer" className="hover:text-black">
-                    Login
-                  </Link>
+                  <Link to="/register/customer" className="hover:text-black">Signup</Link>
+                  <Link to="/login/customer" className="hover:text-black">Login</Link>
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <Link to="/profile" className="hover:text-black">
-                    My Profile
-                  </Link>
-                  <Link to="/my-orders" className="hover:text-black">
-                    My Orders
-                  </Link>
-                  <p className="cursor-pointer hover:text-black" onClick={logout}>
-                    Logout
-                  </p>
+                  
+                  <Link to="/my-orders" className="hover:text-black">My Orders</Link>
+                  <p className="cursor-pointer hover:text-black" onClick={logout}>Logout</p>
                 </div>
               )}
             </motion.div>
@@ -189,9 +186,7 @@ const Navbar: React.FC = () => {
                 <NavLink
                   to={item.to}
                   className={({ isActive }) =>
-                    `hover:text-orange-500 ${
-                      isActive ? "text-orange-600 font-semibold" : ""
-                    }`
+                    `hover:text-orange-500 ${isActive ? "text-orange-600 font-semibold" : ""}`
                   }
                   onClick={() => setMobileMenuOpen(false)}
                 >

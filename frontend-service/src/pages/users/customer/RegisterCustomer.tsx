@@ -4,6 +4,7 @@ import axios from "axios";
 import gsap from "gsap";
 import { userUrl } from "../../../api";
 import { GoogleLogin } from "@react-oauth/google";
+import { parseJwt, upscaleGooglePhoto } from "../../../utils/googleToken";
 
 const RegisterCustomer = () => {
   const [form, setForm] = useState({
@@ -26,32 +27,13 @@ const RegisterCustomer = () => {
     const tempErrors: { [key: string]: string } = {};
     let isValid = true;
 
-    if (!form.name.trim()) {
-      tempErrors.name = "Name is required";
-      isValid = false;
-    }
-    if (!form.email.trim()) {
-      tempErrors.email = "Email is required";
-      isValid = false;
-    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
-      tempErrors.email = "Invalid email address";
-      isValid = false;
-    }
-    if (!form.password.trim()) {
-      tempErrors.password = "Password is required";
-      isValid = false;
-    } else if (form.password.length < 6) {
-      tempErrors.password = "Password must be at least 6 characters";
-      isValid = false;
-    }
-    if (!form.phone.trim()) {
-      tempErrors.phone = "Phone is required";
-      isValid = false;
-    }
-    if (!form.address.trim()) {
-      tempErrors.address = "Address is required";
-      isValid = false;
-    }
+    if (!form.name.trim()) { tempErrors.name = "Name is required"; isValid = false; }
+    if (!form.email.trim()) { tempErrors.email = "Email is required"; isValid = false; }
+    else if (!/\S+@\S+\.\S+/.test(form.email)) { tempErrors.email = "Invalid email address"; isValid = false; }
+    if (!form.password.trim()) { tempErrors.password = "Password is required"; isValid = false; }
+    else if (form.password.length < 6) { tempErrors.password = "Password must be at least 6 characters"; isValid = false; }
+    if (!form.phone.trim()) { tempErrors.phone = "Phone is required"; isValid = false; }
+    if (!form.address.trim()) { tempErrors.address = "Address is required"; isValid = false; }
 
     setErrors(tempErrors);
     return isValid;
@@ -62,10 +44,7 @@ const RegisterCustomer = () => {
     if (!validateForm()) return;
 
     try {
-      const res = await axios.post(`${userUrl}/api/auth/register`, {
-        ...form,
-        role: "customer",
-      });
+      const res = await axios.post(`${userUrl}/api/auth/register`, { ...form, role: "customer" });
       alert(res.data.message || "Registered successfully!");
       navigate("/login/customer");
     } catch (err: any) {
@@ -73,21 +52,8 @@ const RegisterCustomer = () => {
     }
   };
 
-  const handleMouseEnter = () => {
-    gsap.to(liquidRef.current, {
-      x: 0,
-      duration: 0.5,
-      ease: "power2.out",
-    });
-  };
-
-  const handleMouseLeave = () => {
-    gsap.to(liquidRef.current, {
-      x: "-100%",
-      duration: 0.5,
-      ease: "power2.inOut",
-    });
-  };
+  const handleMouseEnter = () => gsap.to(liquidRef.current, { x: 0, duration: 0.5, ease: "power2.out" });
+  const handleMouseLeave = () => gsap.to(liquidRef.current, { x: "-100%", duration: 0.5, ease: "power2.inOut" });
 
   return (
     <div className="flex h-screen w-full bg-gradient-to-r from-green-100 via-white to-blue-200 font-sans">
@@ -114,9 +80,7 @@ const RegisterCustomer = () => {
                     errors[field] ? "border-red-500" : "focus:ring-green-500"
                   }`}
                 />
-                {errors[field] && (
-                  <p className="text-red-500 text-sm mt-1">{errors[field]}</p>
-                )}
+                {errors[field] && <p className="text-red-500 text-sm mt-1">{errors[field]}</p>}
               </div>
             ))}
 
@@ -138,7 +102,7 @@ const RegisterCustomer = () => {
             </div>
           </form>
 
-          {/* Google Continue */}
+          {/* Continue with Google */}
           <div className="mt-5 flex flex-col items-center">
             <div className="text-xs text-gray-500 mb-2">or</div>
             <GoogleLogin
@@ -147,14 +111,21 @@ const RegisterCustomer = () => {
                   const credential = credentialResponse.credential;
                   if (!credential) return alert("No Google credential received");
 
-                  // Optional: pass a role if you want to force customer on signup
-                  const res = await axios.post(`${userUrl}/api/auth/google`, { credential, role: 'customer' });
+                  const payload = parseJwt<{ picture?: string; name?: string; email?: string }>(credential);
+                  if (payload?.picture) {
+                    localStorage.setItem("avatar", upscaleGooglePhoto(payload.picture, 128));
+                  }
+                  if (payload?.name)  localStorage.setItem("google_name", payload.name);
+                  if (payload?.email) localStorage.setItem("google_email", payload.email);
+
+                  // Use your Google auth backend to create/link the user and issue JWT
+                  const res = await axios.post(`${userUrl}/api/auth/google`, { credential, role: "customer" });
                   const { token, user } = res.data;
 
                   if (user.role === "customer") {
                     localStorage.setItem("token", token);
                     localStorage.setItem("user", JSON.stringify(user));
-                    // direct to home after Google "register"
+                    window.dispatchEvent(new StorageEvent("storage", { key: "token" }));
                     navigate('/customer-home');
                   } else {
                     alert("Access denied: Not a customer account");
@@ -172,9 +143,7 @@ const RegisterCustomer = () => {
           <Link to="/login/customer">
             <p className="text-center text-sm mt-6">
               Already have an account?{" "}
-              <span className="text-green-600 hover:underline cursor-pointer">
-                Login here
-              </span>
+              <span className="text-green-600 hover:underline cursor-pointer">Login here</span>
             </p>
           </Link>
         </div>
