@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import gsap from "gsap";
 import axios from "axios";
 import { userUrl } from "../../../api";
+import { GoogleLogin } from "@react-oauth/google";
+import { parseJwt, upscaleGooglePhoto } from "../../../utils/googleToken";
 
 const LoginCustomer = () => {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -61,19 +63,11 @@ const LoginCustomer = () => {
   };
 
   const handleMouseEnter = () => {
-    gsap.to(liquidRef.current, {
-      x: 0,
-      duration: 0.5,
-      ease: "power2.out",
-    });
+    gsap.to(liquidRef.current, { x: 0, duration: 0.5, ease: "power2.out" });
   };
 
   const handleMouseLeave = () => {
-    gsap.to(liquidRef.current, {
-      x: "-100%",
-      duration: 0.5,
-      ease: "power2.inOut",
-    });
+    gsap.to(liquidRef.current, { x: "-100%", duration: 0.5, ease: "power2.inOut" });
   };
 
   return (
@@ -100,9 +94,7 @@ const LoginCustomer = () => {
                   errors.email ? "border-red-500" : "focus:ring-green-500"
                 }`}
               />
-              {errors.email && (
-                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-              )}
+              {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
             </div>
 
             <div>
@@ -116,9 +108,7 @@ const LoginCustomer = () => {
                   errors.password ? "border-red-500" : "focus:ring-green-500"
                 }`}
               />
-              {errors.password && (
-                <p className="text-red-500 text-sm mt-1">{errors.password}</p>
-              )}
+              {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
             </div>
 
             <div className="text-right text-sm text-green-600 hover:underline cursor-pointer">
@@ -143,13 +133,51 @@ const LoginCustomer = () => {
             </div>
           </form>
 
+          {/* Google Login */}
+          <div className="mt-5 flex flex-col items-center">
+            <div className="text-xs text-gray-500 mb-2">or</div>
+            <GoogleLogin
+              onSuccess={async (credentialResponse) => {
+                try {
+                  const credential = credentialResponse.credential;
+                  if (!credential) return alert("No Google credential received");
+
+                  // Decode ID token on the client to read the profile photo
+                  const payload = parseJwt<{ picture?: string; name?: string; email?: string }>(credential);
+                  if (payload?.picture) {
+                    localStorage.setItem("avatar", upscaleGooglePhoto(payload.picture, 128));
+                  }
+                  if (payload?.name)  localStorage.setItem("google_name", payload.name);
+                  if (payload?.email) localStorage.setItem("google_email", payload.email);
+
+                  // Get your app's JWT + user as before
+                  const res = await axios.post(`${userUrl}/api/auth/google`, { credential });
+                  const { token, user } = res.data;
+
+                  if (user.role === "customer") {
+                    localStorage.setItem("token", token);
+                    localStorage.setItem("user", JSON.stringify(user));
+                    // trigger navbar to update (some UIs rely on a storage event)
+                    window.dispatchEvent(new StorageEvent("storage", { key: "token" }));
+                    navigate('/customer-home');
+                  } else {
+                    alert("Access denied: Not a customer account");
+                  }
+                } catch (e: any) {
+                  alert(e.response?.data?.message || "Google sign-in failed");
+                }
+              }}
+              onError={() => {
+                alert("Google sign-in was cancelled or failed");
+              }}
+            />
+          </div>
+
           {/* Navigation to Register */}
           <Link to="/register/customer">
             <p className="text-center text-sm mt-6">
               Not a member?{" "}
-              <span className="text-green-600 hover:underline cursor-pointer">
-                Register now
-              </span>
+              <span className="text-green-600 hover:underline cursor-pointer">Register now</span>
             </p>
           </Link>
         </div>
