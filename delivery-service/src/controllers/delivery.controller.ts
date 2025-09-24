@@ -17,34 +17,37 @@ import axios from "axios";
 import { Delivery } from "../models/delivery.model";
 import { sendSMS } from "../services/sms.service";
 
+import logger from "../utils/logger";
+import { sanitizeForLog } from "../utils/sanitize";
+
 const ORDER_SERVICE_BASE_URL = "http://localhost:3002/api/orders";
 const USER_SERVICE_BASE_URL = "http://localhost:3003/api/auth";
 
+/**
+ * Assign driver automatically
+ */
 export const assignDriverAutomatically = async (
   req: Request,
   res: Response
 ) => {
   const { orderId, customerId, restaurantId } = req.body;
-  console.log(
-    "Received orderId:",
-    orderId,
-    "customerId:",
-    customerId,
-    "restaurantId:",
-    restaurantId
-  );
+
+  // Log only whitelisted, sanitized fields
+  const safeInput = sanitizeForLog({ orderId, customerId, restaurantId });
+  logger.info({ req: { method: req.method, url: req.url }, input: safeInput }, "Received assignDriverAutomatically request");
+
   try {
     const restaurantRes = await axios.get(
       `http://localhost:3001/api/restaurants/${restaurantId}`
     ); //3001
     const restaurant = restaurantRes.data;
 
-    if (!restaurant.available)
+    if (!restaurant.available) {
+      logger.info({ restaurant: sanitizeForLog({ id: restaurantId, available: restaurant?.available }) }, "Restaurant not available");
       return res.status(400).json({ message: "Restaurant not available" });
+    }
 
-    const orderRes = await axios.get(
-      `http://localhost:3002/api/orders/${orderId}`
-    );
+    const orderRes = await axios.get(`${ORDER_SERVICE_BASE_URL}/${orderId}`);
     const order = orderRes.data;
 
     const driver = await findAvailableDriver(
@@ -52,8 +55,10 @@ export const assignDriverAutomatically = async (
       order.deliveryAddress.city
     );
 
-    if (!driver)
+    if (!driver) {
+      logger.info({ restaurantLocation: sanitizeForLog(restaurant.location), deliveryCity: sanitizeForLog(order.deliveryAddress?.city) }, "No matching driver available");
       return res.status(404).json({ message: "No matching driver available" });
+    }
 
     const delivery = await createDelivery({
       orderId,
@@ -65,31 +70,37 @@ export const assignDriverAutomatically = async (
 
     await markDriverAvailability(driver._id.toString(), false);
 
+    logger.info({ delivery: sanitizeForLog({ id: delivery._id, orderId: delivery.orderId, driverId: delivery.driverId }) }, "Driver assigned");
+
     res.status(200).json({ message: "Driver assigned", delivery });
   } catch (error: any) {
-    res
-      .status(500)
-      .json({ message: "Error assigning driver", error: error.message });
+    // Log only the error message to avoid dumping stack/PII to logs visible to users
+    logger.error({ err: sanitizeForLog(error?.message || String(error)) }, "Error assigning driver");
+    res.status(500).json({ message: "Error assigning driver", error: error?.message });
   }
 };
 
+/**
+ * Respond to assignment (accept/decline)
+ */
 export const respondToAssignment = async (req: Request, res: Response) => {
   const { orderId, action } = req.body;
+  logger.info({ req: { method: req.method, url: req.url }, input: sanitizeForLog({ orderId, action }) }, "Respond to assignment");
 
   try {
     const delivery = await findDeliveryByOrderId(orderId);
-    if (!delivery)
+    if (!delivery) {
+      logger.info({ orderId: sanitizeForLog(orderId) }, "Delivery not found for respondToAssignment");
       return res.status(404).json({ message: "Delivery not found" });
+    }
 
     await updateDeliveryAcceptance(delivery, action);
 
     if (action === "decline") {
-      console.log("Driver declined, attempting to reassign...");
+      logger.info({ deliveryId: sanitizeForLog(delivery._id) }, "Driver declined, attempting to reassign...");
 
       try {
-        const orderRes = await axios.get(
-          `${ORDER_SERVICE_BASE_URL}/${orderId}`
-        );
+        const orderRes = await axios.get(`${ORDER_SERVICE_BASE_URL}/${orderId}`);
         const order = orderRes.data;
 
         const newDriver = await findAvailableDriver(
@@ -98,7 +109,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
         );
 
         if (newDriver) {
-          console.log("✅ Found another driver:", newDriver._id);
+          logger.info({ newDriverId: sanitizeForLog(newDriver._id) }, "Found another driver");
 
           // Assign delivery to new driver
           delivery.driverId = newDriver._id.toString();
@@ -113,7 +124,7 @@ export const respondToAssignment = async (req: Request, res: Response) => {
             delivery,
           });
         } else {
-          console.log("❌ No available driver to reassign.");
+          logger.info({ deliveryId: sanitizeForLog(delivery._id) }, "No available driver to reassign");
           // Delivery remains pending without a driver
           delivery.driverId = undefined;
           delivery.acceptStatus = "Pending";
@@ -125,52 +136,52 @@ export const respondToAssignment = async (req: Request, res: Response) => {
             delivery,
           });
         }
-      } catch (error) {
-        console.error("Error during reassignment:", error);
+      } catch (error: any) {
+        logger.error({ err: sanitizeForLog(error?.message || String(error)) }, "Error during reassignment");
         return res.status(500).json({
           message: "Error reassigning delivery",
-          error: (error as Error).message,
+          error: error?.message,
         });
       }
     }
 
     // Normal accept case
-    return res
-      .status(200)
-      .json({ message: `Assignment ${action}ed`, delivery });
+    logger.info({ deliveryId: sanitizeForLog(delivery._id), action: sanitizeForLog(action) }, "Assignment response processed");
+    return res.status(200).json({ message: `Assignment ${action}ed`, delivery });
   } catch (error: any) {
-    console.error(error);
+    logger.error({ err: sanitizeForLog(error?.message || String(error)) }, "Error responding to assignment");
     res.status(500).json({
       message: "Error responding to assignment",
-      error: error.message,
+      error: error?.message,
     });
   }
 };
+
+/**
+ * Get assigned orders for the authenticated driver
+ */
 export const getAssignedOrders = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    console.log("Token User ID:", userId);
+    logger.info({ userId: sanitizeForLog(userId) }, "Get assigned orders - token userId");
 
     // 1️⃣ Find Driver by userId
     const driver = await Driver.findOne({ userId });
     if (!driver) {
+      logger.info({ userId: sanitizeForLog(userId) }, "Driver not found");
       return res.status(404).json({ message: "Driver not found" });
     }
 
-    console.log("Driver _id:", driver._id);
+    logger.info({ driverId: sanitizeForLog(driver._id) }, "Driver found - fetching assigned deliveries");
 
     // 2️⃣ Find assigned deliveries
-    const deliveries = await findAssignedDeliveriesForDriver(
-      driver._id.toString()
-    );
+    const deliveries = await findAssignedDeliveriesForDriver(driver._id.toString());
 
     // 3️⃣ Fetch full deliveryAddress for each order
     const enhancedDeliveries = await Promise.all(
       deliveries.map(async (delivery) => {
         try {
-          const orderRes = await axios.get(
-            `${ORDER_SERVICE_BASE_URL}/${delivery.orderId}`
-          );
+          const orderRes = await axios.get(`${ORDER_SERVICE_BASE_URL}/${delivery.orderId}`);
           const order = orderRes.data;
 
           return {
@@ -181,11 +192,8 @@ export const getAssignedOrders = async (req: Request, res: Response) => {
             restaurantId: order.restaurantId || null,
             specialInstructions: order.specialInstructions || "",
           };
-        } catch (err) {
-          console.error(
-            `Failed fetching order ${delivery.orderId}:`,
-            (err as Error).message
-          );
+        } catch (err: any) {
+          logger.error({ err: sanitizeForLog(err?.message || String(err)), orderId: sanitizeForLog(delivery.orderId) }, "Failed fetching order");
           return {
             ...delivery.toObject(),
             deliveryAddress: null,
@@ -196,7 +204,7 @@ export const getAssignedOrders = async (req: Request, res: Response) => {
 
     res.status(200).json(enhancedDeliveries);
   } catch (error: any) {
-    console.error(error);
+    logger.error({ err: sanitizeForLog(error?.message || String(error)) }, "Error fetching assigned deliveries");
     res.status(500).json({
       message: "Error fetching assigned deliveries",
       error: error.message,
@@ -208,9 +216,12 @@ export const getAssignedOrders = async (req: Request, res: Response) => {
 export const getMyDeliveries = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
+    logger.info({ userId: sanitizeForLog(userId) }, "Get my deliveries - token userId");
+
     const driver = await Driver.findOne({ userId });
 
     if (!driver) {
+      logger.info({ userId: sanitizeForLog(userId) }, "Driver not found in getMyDeliveries");
       return res.status(404).json({ message: "Driver not found" });
     }
 
@@ -219,20 +230,15 @@ export const getMyDeliveries = async (req: Request, res: Response) => {
     const enhancedDeliveries = await Promise.all(
       deliveries.map(async (delivery) => {
         try {
-          const orderRes = await axios.get(
-            `${ORDER_SERVICE_BASE_URL}/${delivery.orderId}`
-          );
+          const orderRes = await axios.get(`${ORDER_SERVICE_BASE_URL}/${delivery.orderId}`);
           const order = orderRes.data;
 
           return {
             ...delivery.toObject(),
             deliveryAddress: order.deliveryAddress || null,
           };
-        } catch (err) {
-          console.error(
-            `Failed fetching order ${delivery.orderId}:`,
-            (err as Error).message
-          );
+        } catch (err: any) {
+          logger.error({ err: sanitizeForLog(err?.message || String(err)), orderId: sanitizeForLog(delivery.orderId) }, "Failed fetching order in getMyDeliveries");
           return {
             ...delivery.toObject(),
             deliveryAddress: null,
@@ -243,10 +249,8 @@ export const getMyDeliveries = async (req: Request, res: Response) => {
 
     res.status(200).json(enhancedDeliveries);
   } catch (error: any) {
-    console.error(error);
-    res
-      .status(500)
-      .json({ message: "Error fetching deliveries", error: error.message });
+    logger.error({ err: sanitizeForLog(error?.message || String(error)) }, "Error fetching deliveries");
+    res.status(500).json({ message: "Error fetching deliveries", error: error.message });
   }
 };
 
@@ -258,39 +262,35 @@ export const updateDeliveryStatus = async (req: Request, res: Response) => {
 
     const allowedStatuses = ["PickedUp", "Delivered", "Cancelled"];
     if (!allowedStatuses.includes(status)) {
+      logger.info({ deliveryId: sanitizeForLog(deliveryId), status: sanitizeForLog(status) }, "Invalid status in updateDeliveryStatus");
       return res.status(400).json({ message: "Invalid status" });
     }
 
     const updatedDelivery = await updateDeliveryStatusById(deliveryId, status);
     if (!updatedDelivery) {
+      logger.info({ deliveryId: sanitizeForLog(deliveryId) }, "Delivery not found in updateDeliveryStatus");
       return res.status(404).json({ message: "Delivery not found" });
     }
 
     // Step 2: If the status is "Delivered", send an email to the customer
     if (status === "Delivered") {
       // Fetch the order details to get the userId
-      console.log("Fetching order details...");
-      const orderRes = await axios.get(
-        `${ORDER_SERVICE_BASE_URL}/${updatedDelivery.orderId}`
-      );
+      logger.info({ deliveryId: sanitizeForLog(updatedDelivery._id) }, "Fetching order details for delivered status");
+      const orderRes = await axios.get(`${ORDER_SERVICE_BASE_URL}/${updatedDelivery.orderId}`);
       const order = orderRes.data;
-      console.log("Order fetched:", order);
+      logger.info({ orderId: sanitizeForLog(order._id || updatedDelivery.orderId) }, "Order fetched for delivery");
 
       // Fetch the customer details from the user service using userId
-      const userRes = await axios.get(
-        `${USER_SERVICE_BASE_URL}/${order.userId}`
-      );
+      const userRes = await axios.get(`${USER_SERVICE_BASE_URL}/${order.userId}`);
       const user = userRes.data;
-      console.log("User fetched:", user);
+      logger.info({ userId: sanitizeForLog(order.userId) }, "User fetched for delivery notification");
 
       // Email details
-      // const customerEmail = 'lavinduyomith2016@gmail.com';
       const customerEmail = "dev40.emailtest@gmail.com";
       const customerName = user.name;
       const deliveryAddress = order.deliveryAddress;
-      const customerPhone = "+94778964821"; //have to change this to the user phone number
+      const customerPhone = "+94778964821"; // change to user phone number if available
 
-      // Email subject and content
       const subject = `Your Order with HungerJet has been Delivered!`;
       const text = `
         Hello ${customerName},\n\n
@@ -305,22 +305,23 @@ export const updateDeliveryStatus = async (req: Request, res: Response) => {
 
       // Send the email to the customer
       if (customerEmail) {
-        console.log("Sending email...");
+        logger.info({ to: sanitizeForLog(customerEmail) }, "Sending email to customer");
         await sendEmail(customerEmail, subject, text);
       }
       // Send SMS if the phone number exists
       if (customerPhone) {
-        console.log("Sending SMS...");
+        logger.info({ to: sanitizeForLog(customerPhone) }, "Sending SMS to customer");
         await sendSMS(customerPhone, message);
       }
     }
 
+    logger.info({ deliveryId: sanitizeForLog(updatedDelivery._id), status: sanitizeForLog(status) }, "Delivery status updated");
     res.status(200).json({
       message: "Delivery status updated successfully",
       updatedDelivery,
     });
   } catch (error: any) {
-    console.error(error);
+    logger.error({ err: sanitizeForLog(error?.message || String(error)) }, "Error updating delivery status");
     res.status(500).json({
       message: "Error updating delivery status",
       error: error.message,
